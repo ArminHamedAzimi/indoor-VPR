@@ -18,6 +18,7 @@ indoor-VPR/
 │   │   └── registry.py          # Algorithm registration/creation
 │   ├── algorithms/              # Concrete implementations only
 │   │   ├── anyloc/              # DINOv2 patch features + VLAD
+│   │   ├── cosplace.py
 │   │   ├── dinov2.py
 │   │   ├── mixvpr.py
 │   │   └── rgb_histogram.py
@@ -44,7 +45,8 @@ In the notebook's **Configuration** cell:
 
 `rgb_histogram` is a fast baseline. `dinov2` and `anyloc` download DINOv2 through
 `torch.hub` on first use. `mixvpr` downloads the official GSV-Cities pretrained
-checkpoint on first use. All learned methods use CUDA, Apple MPS, or CPU automatically.
+checkpoint on first use. `cosplace` downloads the official SF-XL pretrained model
+on first use. All learned methods use CUDA, Apple MPS, or CPU automatically.
 AnyLoc can load an official vocabulary or fit one from the selected database;
 see its [adapter notes](src/indoor_vpr/algorithms/anyloc/README.md).
 
@@ -58,6 +60,11 @@ create_algorithm("mixvpr", output_dim=4096, batch_size=8)
 Pass `checkpoint_path="...ckpt"` to use an already downloaded official checkpoint.
 These checkpoints were trained on outdoor Google Street View imagery, so evaluate
 them on representative indoor data before relying on their rankings.
+
+CosPlace uses the official pretrained SF-XL checkpoints from the upstream release.
+The default wrapper uses `ResNet50` with a 2048-dimensional descriptor. Those
+weights were trained on outdoor geo-localization data, so they are not a universal
+fit for every indoor image set.
 
 ## Add an algorithm
 
