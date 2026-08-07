@@ -2,5 +2,6 @@
 
 from .dinov2 import DINOv2
 from .rgb_histogram import RGBHistogram
+from .anyloc import AnyLoc
 
-__all__ = ["DINOv2", "RGBHistogram"]
+__all__ = ["AnyLoc", "DINOv2", "RGBHistogram"]

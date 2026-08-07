@@ -37,7 +37,7 @@ def _l2_normalize(descriptors: np.ndarray) -> np.ndarray:
 def run_vpr(dataset: ImageDataset, algorithm: VPRAlgorithm) -> VPRResults:
     """Encode both sets and rank database images using cosine similarity."""
 
-    database_descriptors = _l2_normalize(algorithm.encode(dataset.database_paths))
+    database_descriptors = _l2_normalize(algorithm.encode_database(dataset.database_paths))
     query_descriptors = _l2_normalize(algorithm.encode(dataset.query_paths))
     if database_descriptors.shape[1] != query_descriptors.shape[1]:
         raise ValueError("Database and query descriptor sizes do not match.")
