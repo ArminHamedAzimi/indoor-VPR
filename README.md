@@ -17,7 +17,9 @@ indoor-VPR/
 │   │   ├── pipeline.py          # Similarity and ranking
 │   │   └── registry.py          # Algorithm registration/creation
 │   ├── algorithms/              # Concrete implementations only
+│   │   ├── anyloc/              # DINOv2 patch features + VLAD
 │   │   ├── dinov2.py
+│   │   ├── mixvpr.py
 │   │   └── rgb_histogram.py
 │   └── visualization.py         # Notebook plots
 ├── match.py                     # Original standalone experiment
@@ -40,8 +42,22 @@ In the notebook's **Configuration** cell:
 - use `MAX_DATABASE_IMAGES` and `MAX_QUERY_IMAGES` for quick experiments;
 - edit `ALGORITHM_OPTIONS` to tune an algorithm.
 
-`rgb_histogram` is a fast baseline. `dinov2` downloads its model through
-`torch.hub` on first use and then uses CUDA, Apple MPS, or CPU automatically.
+`rgb_histogram` is a fast baseline. `dinov2` and `anyloc` download DINOv2 through
+`torch.hub` on first use. `mixvpr` downloads the official GSV-Cities pretrained
+checkpoint on first use. All learned methods use CUDA, Apple MPS, or CPU automatically.
+AnyLoc can load an official vocabulary or fit one from the selected database;
+see its [adapter notes](src/indoor_vpr/algorithms/anyloc/README.md).
+
+MixVPR requires 320 x 320 inputs and offers the official 4096-, 512-, and
+128-dimensional checkpoints. The strongest 4096-dimensional model is the default:
+
+```python
+create_algorithm("mixvpr", output_dim=4096, batch_size=8)
+```
+
+Pass `checkpoint_path="...ckpt"` to use an already downloaded official checkpoint.
+These checkpoints were trained on outdoor Google Street View imagery, so evaluate
+them on representative indoor data before relying on their rankings.
 
 ## Add an algorithm
 
