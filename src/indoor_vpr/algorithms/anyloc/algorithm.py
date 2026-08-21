@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -93,33 +94,56 @@ class AnyLoc(VPRAlgorithm):
         tensor = self.center_crop(tensor, [patch_height, patch_width])
         return self.extractor(tensor.unsqueeze(0)).squeeze(0)
 
-    def _extract_all(self, image_paths: Sequence[Path]):
-        return [self._local_descriptors(path).cpu() for path in image_paths]
+    def _sample_vocabulary_descriptors(self, image_paths: Sequence[Path]):
+        if not image_paths:
+            raise ValueError("AnyLoc needs at least one image to fit a vocabulary.")
 
-    def _fit_vocabulary(self, local_descriptors) -> None:
-        descriptors = self.torch.cat(local_descriptors, dim=0)
-        if len(descriptors) > self.max_vocabulary_descriptors:
-            generator = self.torch.Generator().manual_seed(42)
-            indices = self.torch.randperm(len(descriptors), generator=generator)[
-                : self.max_vocabulary_descriptors
-            ]
-            descriptors = descriptors[indices]
-        self.vlad.fit(descriptors, iterations=self.kmeans_iterations)
+        generator = self.torch.Generator().manual_seed(42)
+        per_image_cap = max(1, math.ceil(self.max_vocabulary_descriptors / len(image_paths)))
+        samples = []
+        collected = 0
 
-    def _aggregate(self, local_descriptors) -> np.ndarray:
-        global_descriptors = [self.vlad.generate(descriptors).cpu() for descriptors in local_descriptors]
-        return self.torch.stack(global_descriptors).numpy().astype(np.float32)
+        for path in image_paths:
+            descriptors = self._local_descriptors(path).detach().cpu()
+            if len(descriptors) == 0:
+                continue
+            take = min(len(descriptors), per_image_cap, self.max_vocabulary_descriptors - collected)
+            if take <= 0:
+                break
+            if take < len(descriptors):
+                indices = self.torch.randperm(len(descriptors), generator=generator)[:take]
+                descriptors = descriptors[indices]
+            elif take > len(descriptors):
+                take = len(descriptors)
+            samples.append(descriptors[:take])
+            collected += take
+            if collected >= self.max_vocabulary_descriptors:
+                break
+
+        if not samples:
+            raise ValueError("AnyLoc could not sample descriptors for vocabulary fitting.")
+        return self.torch.cat(samples, dim=0)
+
+    def _aggregate_paths(self, image_paths: Sequence[Path]) -> np.ndarray:
+        if not image_paths:
+            raise ValueError("AnyLoc needs at least one image to encode.")
+
+        descriptors = []
+        for path in image_paths:
+            local_descriptors = self._local_descriptors(path)
+            descriptors.append(self.vlad.generate(local_descriptors).cpu())
+        return self.torch.stack(descriptors).numpy().astype(np.float32)
 
     def encode_database(self, image_paths: Sequence[Path]) -> np.ndarray:
-        local_descriptors = self._extract_all(image_paths)
         if self.vlad.centers is None:
-            self._fit_vocabulary(local_descriptors)
-        return self._aggregate(local_descriptors)
+            vocabulary_descriptors = self._sample_vocabulary_descriptors(image_paths)
+            self.vlad.fit(vocabulary_descriptors, iterations=self.kmeans_iterations)
+        return self._aggregate_paths(image_paths)
 
     def encode(self, image_paths: Sequence[Path]) -> np.ndarray:
         if self.vlad.centers is None:
             raise RuntimeError("Encode the database first or provide an AnyLoc vocabulary file.")
-        return self._aggregate(self._extract_all(image_paths))
+        return self._aggregate_paths(image_paths)
 
 
 register_algorithm(AnyLoc.name, AnyLoc)
