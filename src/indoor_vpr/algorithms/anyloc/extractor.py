@@ -58,3 +58,52 @@ class DINOv2PatchExtractor:
 
     def close(self) -> None:
         self.hook.remove()
+
+
+class CLIPPatchExtractor:
+    """Extract local ViT patch tokens from OpenAI CLIP.
+
+    CLIP's pretrained positional embeddings are learned for its native square
+    resolution, so images are resized to that resolution by ``AnyLoc`` before
+    extraction.  Only ViT variants expose a patch-token grid; ResNet CLIP
+    variants therefore are deliberately rejected.
+    """
+
+    def __init__(self, model_name: str, device: str) -> None:
+        import torch
+
+        self.torch = torch
+        self.model = cast(
+            torch.nn.Module,
+            torch.hub.load("openai/CLIP", "load", model_name, device=device, jit=False)[0],
+        ).eval().to(device)
+        visual = cast(Any, getattr(self.model, "visual", None))
+        if visual is None or not hasattr(visual, "conv1") or not hasattr(visual, "transformer"):
+            raise ValueError(
+                f"CLIP model '{model_name}' is not a Vision Transformer. "
+                "Choose a ViT model such as 'ViT-B/16', 'ViT-B/32', or 'ViT-L/14'."
+            )
+        self.visual = visual
+        self.image_size = int(visual.input_resolution)
+        self.patch_size = int(visual.conv1.kernel_size[0])
+
+    def __call__(self, image):
+        """Run CLIP's visual ViT and return normalized patch tokens."""
+        functional = self.torch.nn.functional
+        with self.torch.inference_mode():
+            features = self.visual.conv1(image)
+            features = features.reshape(features.shape[0], features.shape[1], -1)
+            features = features.permute(0, 2, 1)
+            class_token = self.visual.class_embedding.to(features.dtype)
+            class_token = class_token + self.torch.zeros(
+                features.shape[0], 1, features.shape[-1], dtype=features.dtype, device=features.device
+            )
+            features = self.torch.cat([class_token, features], dim=1)
+            features = features + self.visual.positional_embedding.to(features.dtype)
+            features = self.visual.ln_pre(features)
+            features = features.permute(1, 0, 2)
+            features = self.visual.transformer(features)
+            features = features.permute(1, 0, 2)
+            features = self.visual.ln_post(features)
+            descriptors = functional.normalize(features[:, 1:, :], dim=-1)
+        return descriptors

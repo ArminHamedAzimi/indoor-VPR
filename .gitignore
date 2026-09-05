@@ -79,6 +79,9 @@ target/
 # Jupyter Notebook
 .ipynb_checkpoints
 
+# Downloaded third-party localization source and generated localization artifacts
+third_party/Hierarchical-Localization/
+
 # IPython
 profile_default/
 ipython_config.py

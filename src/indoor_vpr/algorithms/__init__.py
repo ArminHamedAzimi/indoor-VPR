@@ -3,7 +3,8 @@
 from .dinov2 import DINOv2
 from .cosplace import CosPlace
 from .mixvpr import MixVPR
+from .netvlad import NetVLAD
 from .rgb_histogram import RGBHistogram
 from .anyloc import AnyLoc
 
-__all__ = ["AnyLoc", "CosPlace", "DINOv2", "MixVPR", "RGBHistogram"]
+__all__ = ["AnyLoc", "CosPlace", "DINOv2", "MixVPR", "NetVLAD", "RGBHistogram"]

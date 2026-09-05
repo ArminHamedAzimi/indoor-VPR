@@ -121,7 +121,15 @@ def run_vpr(dataset: ImageDataset, algorithm: VPRAlgorithm) -> VPRResults:
     query_descriptors = _l2_normalize(algorithm.encode(dataset.query_paths))
     if database_descriptors.shape[1] != query_descriptors.shape[1]:
         raise ValueError("Database and query descriptor sizes do not match.")
-    similarity = query_descriptors @ database_descriptors.T
+    similarity = np.asarray(
+        algorithm.similarity(query_descriptors, database_descriptors),
+        dtype=np.float32,
+    )
+    expected_shape = (len(dataset.query_paths), len(dataset.database_paths))
+    if similarity.shape != expected_shape:
+        raise ValueError(
+            f"Algorithm similarity returned shape {similarity.shape}; expected {expected_shape}."
+        )
     ranking = np.argsort(-similarity, axis=1)
     return VPRResults(dataset=dataset, similarity=similarity, ranked_database_indices=ranking)
 
@@ -175,9 +183,18 @@ def stream_vpr_similarity_csv(
                     raise ValueError("Database and query descriptor sizes do not match.")
             elif query_batch.shape[1] != query_descriptor_dim:
                 raise ValueError("Query descriptor sizes are inconsistent across batches.")
-            for offset, query_descriptor in enumerate(query_batch):
+            batch_scores = np.asarray(
+                algorithm.similarity(query_batch, database_descriptors),
+                dtype=np.float32,
+            )
+            expected_shape = (end - start, len(dataset.database_paths))
+            if batch_scores.shape != expected_shape:
+                raise ValueError(
+                    f"Algorithm similarity returned shape {batch_scores.shape}; "
+                    f"expected {expected_shape}."
+                )
+            for offset, scores in enumerate(batch_scores):
                 query_index = start + offset
-                scores = np.asarray(query_descriptor @ database_descriptors.T, dtype=np.float32)
                 if len(scores) <= top_k:
                     top_indices = np.argsort(-scores)
                 else:

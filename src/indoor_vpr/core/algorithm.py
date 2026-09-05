@@ -24,3 +24,17 @@ class VPRAlgorithm(ABC):
         """
 
         return self.encode(image_paths)
+
+    def similarity(
+        self,
+        query_descriptors: np.ndarray,
+        database_descriptors: np.ndarray,
+    ) -> np.ndarray:
+        """Return pairwise query-to-database similarity scores.
+
+        Most algorithms emit one L2-normalized descriptor per image and use a
+        dot product. Algorithms with multiple views per image can override
+        this method while keeping the retrieval pipeline unchanged.
+        """
+
+        return query_descriptors @ database_descriptors.T

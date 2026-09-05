@@ -10,7 +10,7 @@ from PIL import Image
 
 from indoor_vpr.core import VPRAlgorithm, register_algorithm
 
-from .extractor import DINOv2PatchExtractor, Facet
+from .extractor import CLIPPatchExtractor, DINOv2PatchExtractor, Facet
 from .vlad import VLAD
 
 if TYPE_CHECKING:
@@ -18,7 +18,7 @@ if TYPE_CHECKING:
 
 
 class AnyLoc(VPRAlgorithm):
-    """AnyLoc-style DINOv2 patch descriptors with VLAD aggregation.
+    """AnyLoc-style DINOv2 or CLIP patch descriptors with VLAD aggregation.
 
     Supply an official AnyLoc ``c_centers.pt`` file for reproducible inference.
     If no vocabulary is supplied, a codebook is fitted from the active database.
@@ -31,6 +31,7 @@ class AnyLoc(VPRAlgorithm):
         model_name: str = "dinov2_vitg14",
         layer: int = 31,
         facet: Facet = "value",
+        feature_model: str = "dinov2",
         num_clusters: int = 32,
         vocabulary_path: str | Path | None = None,
         max_image_size: int = 1024,
@@ -54,17 +55,25 @@ class AnyLoc(VPRAlgorithm):
         self.max_image_size = max_image_size
         self.max_vocabulary_descriptors = max_vocabulary_descriptors
         self.kmeans_iterations = kmeans_iterations
-        self.extractor = DINOv2PatchExtractor(model_name, layer, facet, self.device)
+        feature_model = feature_model.casefold()
+        if feature_model == "dinov2":
+            self.extractor = DINOv2PatchExtractor(model_name, layer, facet, self.device)
+            normalization_mean = [0.485, 0.456, 0.406]
+            normalization_std = [0.229, 0.224, 0.225]
+        elif feature_model == "clip":
+            self.extractor = CLIPPatchExtractor(model_name, self.device)
+            normalization_mean = [0.48145466, 0.4578275, 0.40821073]
+            normalization_std = [0.26862954, 0.26130258, 0.27577711]
+        else:
+            raise ValueError("feature_model must be 'dinov2' or 'clip'.")
+        self.feature_model = feature_model
         self.vlad = VLAD(num_clusters, self.device)
         self.to_tensor = cast(
             "Callable[[Image.Image], torch.Tensor]",
             transforms.Compose(
                 [
                     transforms.ToTensor(),
-                    transforms.Normalize(
-                        mean=[0.485, 0.456, 0.406],
-                        std=[0.229, 0.224, 0.225],
-                    ),
+                    transforms.Normalize(mean=normalization_mean, std=normalization_std),
                 ]
             ),
         )
@@ -77,6 +86,16 @@ class AnyLoc(VPRAlgorithm):
     def _local_descriptors(self, path: Path):
         with Image.open(path) as image:
             tensor = self.to_tensor(image.convert("RGB")).to(self.device)
+        if self.feature_model == "clip":
+            image_size = self.extractor.image_size
+            tensor = self.resize(
+                tensor,
+                [image_size, image_size],
+                interpolation=self.interpolation_mode.BICUBIC,
+                antialias=True,
+            )
+            return self.extractor(tensor.unsqueeze(0)).squeeze(0)
+
         height, width = tensor.shape[-2:]
         scale = min(1.0, self.max_image_size / max(height, width))
         if scale < 1.0:

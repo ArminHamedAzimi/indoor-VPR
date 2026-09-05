@@ -22,3 +22,21 @@ When `vocabulary_path=None`, the adapter fits a VLAD vocabulary from local patch
 descriptors of the currently selected database. That mode is convenient for new
 datasets but is not directly comparable with results using the published AnyLoc
 vocabularies.
+
+## CLIP patch descriptors
+
+The adapter can also aggregate local OpenAI CLIP ViT patch tokens with VLAD:
+
+```python
+{
+    "feature_model": "clip",
+    "model_name": "ViT-B/16",
+    "num_clusters": 32,
+    "vocabulary_path": None,
+}
+```
+
+The first CLIP run downloads OpenAI's CLIP repository and model weights through
+`torch.hub`. Use a separate vocabulary for each CLIP model; published AnyLoc
+vocabularies are DINOv2-specific. CLIP uses its native square input resolution,
+whereas DINOv2 retains AnyLoc's aspect-ratio-preserving preprocessing.

@@ -1,0 +1,10 @@
+-r requirements.txt
+openpyxl>=3.1
+opencv-python>=4.8
+tqdm>=4.36
+scipy>=1.11
+h5py>=3.10
+pycolmap>=4.1
+kornia>=0.6.11
+gdown>=5.0
+lightglue @ git+https://github.com/cvg/LightGlue
